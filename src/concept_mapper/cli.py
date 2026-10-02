@@ -16,6 +16,7 @@ from concept_mapper.config import (
     build_repository,
     settings_from_env,
 )
+from concept_mapper.connections import load_connection, vocabulary_schema_parts
 from concept_mapper.mapping import map_codes
 from concept_mapper.output.concept_set import write_concept_set
 from concept_mapper.output.excel import write_workbook
@@ -80,6 +81,18 @@ def map(
     ] = "databricks",
     catalog: Annotated[str, typer.Option("--catalog", help="Databricks catalog.")] = None,
     schema: Annotated[str, typer.Option("--schema", help="Databricks schema.")] = None,
+    connection: Annotated[
+        str,
+        typer.Option(
+            "--connection", help="Named connection from .config/ohdsi/<name>_connection.yml."
+        ),
+    ] = None,
+    cdm: Annotated[
+        str, typer.Option("--cdm", help="CDM to use from the connection config.")
+    ] = None,
+    config_dir: Annotated[
+        Path, typer.Option("--config-dir", help="Directory holding <name>_connection.yml files.")
+    ] = None,
     csv_dir: Annotated[
         Path, typer.Option("--csv-dir", help="Directory of ATHENA CSVs (DuckDB backend).")
     ] = None,
@@ -97,17 +110,25 @@ def map(
         raise typer.BadParameter("No codes provided (use --codes or --codes-file).")
 
     src_vocabularies = _split_csv(source_vocabularies) or list(DEFAULT_SOURCE_VOCABULARIES)
-    settings = settings_from_env(
-        Settings(
-            backend=backend,
-            target_vocabulary=target_vocabulary,
-            output_dir=str(output_dir),
-            name=name,
-            catalog=catalog,
-            schema=schema,
-            csv_dir=str(csv_dir) if csv_dir else None,
-        )
+    settings = Settings(
+        backend=backend,
+        target_vocabulary=target_vocabulary,
+        output_dir=str(output_dir),
+        name=name,
+        catalog=catalog,
+        schema=schema,
+        csv_dir=str(csv_dir) if csv_dir else None,
     )
+    if connection:
+        config = load_connection(connection, str(config_dir) if config_dir else None)
+        resolved_catalog, resolved_schema = vocabulary_schema_parts(config, cdm)
+        settings.backend = config.driver
+        settings.server_hostname = config.databricks.server_hostname
+        settings.http_path = config.databricks.http_path
+        settings.token = config.databricks.token
+        settings.catalog = resolved_catalog or catalog
+        settings.schema = resolved_schema or schema
+    settings = settings_from_env(settings)
 
     repo = build_repository(settings)
     try:
