@@ -1,0 +1,14 @@
+concept_id	concept_name	domain_id	vocabulary_id	concept_class_id	standard_concept	concept_code	valid_start_date	valid_end_date	invalid_reason
+1001	Type 2 diabetes mellitus without complications	Condition	ICD10CM	4-char billing code		E11.9	19700101	20991231	
+1002	Malignant neoplasm of base of tongue	Condition	ICD10CM	3-char nonbill code		C01	19700101	20991231	
+1003	ST elevation myocardial infarction involving anterior wall	Condition	ICD10CM	4-char billing code		I21.0	19700101	20991231	
+1004	Cholera	Condition	ICD10CM	3-char nonbill code		A00	19700101	20991231	
+1005	Encounter for general examination	Observation	ICD10CM	4-char billing code		Z01.0	19700101	20991231	
+1006	Type 2 diabetes mellitus	Condition	ICD10CM	3-char nonbill code		E11	19700101	20991231	
+1008	Acute myocardial infarction	Condition	ICD10CM	3-char nonbill code		I21	19700101	20991231	
+2001	Type 2 diabetes mellitus	Condition	SNOMED	Clinical Finding	S	44054006	19700101	20991231	
+2002	Primary malignant neoplasm of base of tongue	Condition	SNOMED	Clinical Finding	S	269533000	19700101	20991231	
+2003	Acute anteroseptal myocardial infarction	Condition	SNOMED	Clinical Finding	S	233838001	19700101	20991231	
+2004	Acute myocardial infarction	Condition	SNOMED	Clinical Finding	S	57054005	19700101	20991231	
+2005	General examination of patient	Observation	SNOMED	Clinical Finding	S	162673000	19700101	20991231	
+9999	Examination intermediate	Observation	SNOMED	Clinical Finding		INTERM1	19700101	20991231	
