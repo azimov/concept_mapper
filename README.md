@@ -97,6 +97,18 @@ Use `--connection mydb --cdm mycdm` to select a connection and CDM. The
 | `--csv-dir` | Directory of ATHENA CSVs for the DuckDB backend. |
 | `--output-dir` | Where to write `concept_set.json` and `concept_set.xlsx`. |
 | `--name` | Concept set name. |
+| `--count` | Count record frequency of standard/source concepts in the CDM (requires `--connection` with a `cdm` block). |
+
+## Frequency counting (`--count`)
+
+With `--count`, each standard concept's `domain_id` is used to select the CDM
+domain table (e.g. `Condition` -> `condition_occurrence`), and the record count
+per standard concept is computed from that table. Source-concept frequencies are
+computed from the matching `*_source_concept_id` column. Counts are added to the
+Excel workbook (`record_count` / `source_record_count` columns).
+
+Supported domains: Condition, Drug, Procedure, Measurement, Observation, Device,
+Visit, Specimen.
 
 ## Outputs
 

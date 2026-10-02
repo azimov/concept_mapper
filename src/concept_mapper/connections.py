@@ -140,3 +140,14 @@ def vocabulary_schema_parts(
     if schema is None:
         schema = config.databricks.schema
     return catalog, schema
+
+
+def cdm_schema_parts(
+    config: ConnectionConfig, cdm_name: str | None = None
+) -> tuple[str | None, str | None]:
+    """Resolve (catalog, schema) for the CDM data tables from the selected cdm."""
+    cdm = pick_cdm(config, cdm_name)
+    catalog, schema = split_schema(cdm.cdm_schema)
+    if catalog is None:
+        catalog = config.databricks.catalog
+    return catalog, schema

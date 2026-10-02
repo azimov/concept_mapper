@@ -24,6 +24,8 @@ class Settings:
     token: str | None = None
     catalog: str | None = None
     schema: str | None = None
+    cdm_catalog: str | None = None
+    cdm_schema: str | None = None
     csv_dir: str | None = None
     db_path: str | None = None
 

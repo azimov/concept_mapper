@@ -42,8 +42,14 @@ class DuckDBRepository(VocabularyRepository):
             )
             self.supports_ancestors = True
 
-    def _table(self, name: str) -> str:
+    def _table(self, name: str, catalog: str | None = None, schema: str | None = None) -> str:
         return name
+
+    def load_table(self, name: str, csv_path: str) -> None:
+        self._conn.execute(
+            "CREATE TABLE " + name + " AS SELECT * FROM read_csv_auto(?, header=true)",
+            [csv_path],
+        )
 
     def _fetch(self, sql: str) -> list[dict]:
         result = self._conn.execute(sql)

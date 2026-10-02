@@ -38,7 +38,7 @@ class VocabularyRepository(ABC):
     supports_ancestors: bool = False
 
     @abstractmethod
-    def _table(self, name: str) -> str:
+    def _table(self, name: str, catalog: str | None = None, schema: str | None = None) -> str:
         raise NotImplementedError
 
     @abstractmethod
@@ -137,3 +137,22 @@ class VocabularyRepository(ABC):
             ancestor = int(r["ancestor_concept_id"])
             result.setdefault(ancestor, []).append(int(r["descendant_concept_id"]))
         return result
+
+    def count_in_table(
+        self,
+        table: str,
+        concept_column: str,
+        concept_ids: list[int],
+        catalog: str | None = None,
+        schema: str | None = None,
+    ) -> dict[int, int]:
+        if not concept_ids:
+            return {}
+        ids = sorted({int(i) for i in concept_ids})
+        sql = (
+            f"SELECT {concept_column} AS concept_id, COUNT(*) AS record_count "
+            f"FROM {self._table(table, catalog, schema)} "
+            f"WHERE {concept_column} IN {in_ints(ids)} "
+            f"GROUP BY {concept_column}"
+        )
+        return {int(r["concept_id"]): int(r["record_count"]) for r in self._fetch(sql)}

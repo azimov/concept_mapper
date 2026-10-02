@@ -16,7 +16,12 @@ from concept_mapper.config import (
     build_repository,
     settings_from_env,
 )
-from concept_mapper.connections import load_connection, vocabulary_schema_parts
+from concept_mapper.connections import (
+    cdm_schema_parts,
+    load_connection,
+    vocabulary_schema_parts,
+)
+from concept_mapper.frequency import count_frequencies
 from concept_mapper.mapping import map_codes
 from concept_mapper.output.concept_set import write_concept_set
 from concept_mapper.output.excel import write_workbook
@@ -102,6 +107,12 @@ def map(
     name: Annotated[
         str, typer.Option("--name", "-n", help="Concept set name.")
     ] = "Concept set",
+    count: Annotated[
+        bool,
+        typer.Option(
+            "--count", help="Count standard/source concept record frequency in the CDM."
+        ),
+    ] = False,
 ) -> None:
     all_codes = _split_csv(codes)
     if codes_file:
@@ -128,12 +139,24 @@ def map(
         settings.token = config.databricks.token
         settings.catalog = resolved_catalog or catalog
         settings.schema = resolved_schema or schema
+        cdm_catalog, cdm_schema = cdm_schema_parts(config, cdm)
+        settings.cdm_catalog = cdm_catalog or resolved_catalog
+        settings.cdm_schema = cdm_schema
     settings = settings_from_env(settings)
+
+    if count and not settings.cdm_schema:
+        raise typer.BadParameter(
+            "--count requires a CDM (provide --connection with a cdm block)."
+        )
 
     repo = build_repository(settings)
     try:
         result = map_codes(repo, all_codes, src_vocabularies, settings.target_vocabulary)
         report = validate_result(repo, result, src_vocabularies, settings.target_vocabulary)
+        if count:
+            count_frequencies(
+                repo, result, settings.cdm_catalog, settings.cdm_schema
+            )
     finally:
         repo.close()
 

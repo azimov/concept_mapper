@@ -33,11 +33,13 @@ class DatabricksRepository(VocabularyRepository):
         )
         self._cursor = self._conn.cursor()
 
-    def _table(self, name: str) -> str:
-        if self._catalog and self._schema:
-            return f"{self._catalog}.{self._schema}.{name}"
-        if self._schema:
-            return f"{self._schema}.{name}"
+    def _table(self, name: str, catalog: str | None = None, schema: str | None = None) -> str:
+        c = catalog or self._catalog
+        s = schema or self._schema
+        if c and s:
+            return f"{c}.{s}.{name}"
+        if s:
+            return f"{s}.{name}"
         return name
 
     def _fetch(self, sql: str) -> list[dict]:

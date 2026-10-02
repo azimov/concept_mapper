@@ -1,0 +1,6 @@
+condition_occurrence_id	person_id	condition_concept_id	condition_source_concept_id
+1	p1	2001	1001
+2	p2	2001	1001
+3	p3	2001	1006
+4	p4	2002	1002
+5	p5	2003	1003

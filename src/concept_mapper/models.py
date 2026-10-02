@@ -68,6 +68,7 @@ class SourceMatch:
     source_concept: ConceptRow | None = None
     standard_concept_ids: list[int] = field(default_factory=list)
     value_concept_ids: list[int] = field(default_factory=list)
+    source_record_count: int | None = None
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -84,6 +85,7 @@ class StandardConcept:
     concept: ConceptRow
     source_codes: list[str] = field(default_factory=list)
     extra_source_codes: list[str] = field(default_factory=list)
+    record_count: int | None = None
 
     @property
     def is_overbroad(self) -> bool:

@@ -68,10 +68,11 @@ def write_workbook(path: str | Path, report: ValidationReport) -> Path:
             "standard_concept_codes",
             "standard_concept_names",
             "value_concept_ids",
+            "source_record_count",
             "status",
             "notes",
         ],
-        [14, 14, 12, 18, 42, 20, 16, 18, 24, 48, 18, 12, 50],
+        [14, 14, 12, 18, 42, 20, 16, 18, 24, 48, 18, 18, 12, 50],
     )
     for match in report.result.source_matches:
         src = match.source_concept
@@ -88,6 +89,7 @@ def write_workbook(path: str | Path, report: ValidationReport) -> Path:
             std_codes,
             std_names,
             "; ".join(str(v) for v in match.value_concept_ids),
+            match.source_record_count if match.source_record_count is not None else "",
             match.status,
             "; ".join(match.notes),
         ]
@@ -110,10 +112,11 @@ def write_workbook(path: str | Path, report: ValidationReport) -> Path:
             "concept_class_id",
             "source_codes",
             "extra_source_codes",
+            "record_count",
             "is_overbroad",
             "recommendation",
         ],
-        [18, 14, 48, 14, 14, 18, 40, 40, 14, 24],
+        [18, 14, 48, 14, 14, 18, 40, 40, 14, 14, 24],
     )
     recommendation_by_id: dict[int, str] = {}
     for standard in report.exclusions:
@@ -134,6 +137,7 @@ def write_workbook(path: str | Path, report: ValidationReport) -> Path:
                 c.concept_class_id,
                 "; ".join(standard.source_codes),
                 "; ".join(standard.extra_source_codes),
+                standard.record_count if standard.record_count is not None else "",
                 "yes" if standard.is_overbroad else "no",
                 recommendation_by_id.get(cid, ""),
             ]
