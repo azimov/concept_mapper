@@ -8,7 +8,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from concept_mapper.models import ValidationReport
+from concept_mapper.models import MappingResult, ValidationReport
 
 _RED = PatternFill(start_color="FFFFC7CE", end_color="FFFFC7CE", fill_type="solid")
 _RED_FONT = Font(color="FF9C0006")
@@ -46,7 +46,89 @@ def _std_refs(ids: list[int], report: ValidationReport) -> tuple[str, str, str]:
     )
 
 
-def write_workbook(path: str | Path, report: ValidationReport) -> Path:
+def _write_excluded_sheets(wb: Workbook, report: ValidationReport, excluded: MappingResult) -> None:
+    included_ids = set(report.result.standard_ids)
+    ws = wb.create_sheet("Excluded Source Codes")
+    _write_header(
+        ws,
+        [
+            "input_code",
+            "matched_code",
+            "match_type",
+            "source_concept_name",
+            "source_vocabulary_id",
+            "standard_concept_ids",
+            "standard_concept_codes",
+            "standard_concept_names",
+            "status",
+            "notes",
+        ],
+        [14, 14, 12, 42, 20, 18, 24, 48, 12, 50],
+    )
+    for match in excluded.source_matches:
+        src = match.source_concept
+        ids = match.standard_concept_ids
+        codes = [excluded.standard_concepts[i].concept.concept_code for i in ids if i in excluded.standard_concepts]
+        names = [excluded.standard_concepts[i].concept.concept_name for i in ids if i in excluded.standard_concepts]
+        ws.append(
+            [
+                match.input_code,
+                match.matched_code or "",
+                match.match_type,
+                src.concept_name if src else "",
+                src.vocabulary_id if src else "",
+                "; ".join(str(i) for i in ids),
+                "; ".join(codes),
+                "; ".join(names),
+                match.status,
+                "; ".join(match.notes),
+            ]
+        )
+        if match.status != "mapped":
+            for cell in ws[ws.max_row]:
+                cell.fill = _RED
+                cell.font = _RED_FONT
+
+    ws2 = wb.create_sheet("Excluded Concepts")
+    _write_header(
+        ws2,
+        [
+            "concept_id",
+            "concept_code",
+            "concept_name",
+            "vocabulary_id",
+            "domain_id",
+            "excluded_source_codes",
+            "also_in_included_set",
+        ],
+        [18, 14, 48, 14, 14, 40, 20],
+    )
+    for cid in excluded.standard_ids:
+        standard = excluded.standard_concepts[cid]
+        c = standard.concept
+        overlap = cid in included_ids
+        ws2.append(
+            [
+                c.concept_id,
+                c.concept_code,
+                c.concept_name,
+                c.vocabulary_id,
+                c.domain_id,
+                "; ".join(standard.source_codes),
+                "yes" if overlap else "no",
+            ]
+        )
+        if overlap:
+            for cell in ws2[ws2.max_row]:
+                cell.fill = _YELLOW
+                cell.font = _YELLOW_FONT
+
+
+def write_workbook(
+    path: str | Path,
+    report: ValidationReport,
+    excluded_result: MappingResult | None = None,
+) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     wb = Workbook()
@@ -184,6 +266,9 @@ def write_workbook(path: str | Path, report: ValidationReport) -> Path:
         suggestions = report.descendant_suggestions.get(c.concept_id, [])
         desc = "; ".join(f"{d.concept_id} {d.concept_name}" for d in suggestions)
         ws3.append([f"{c.concept_id} ({c.concept_code})", f"{c.concept_name}; consider: {desc}"])
+
+    if excluded_result is not None:
+        _write_excluded_sheets(wb, report, excluded_result)
 
     wb.save(path)
     return path

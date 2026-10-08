@@ -40,12 +40,22 @@ def _item(concept: ConceptRow, *, excluded: bool = False) -> dict:
 def build_concept_set(
     result: MappingResult,
     exclusions: list[StandardConcept],
+    excluded_result: MappingResult | None = None,
 ) -> dict:
+    explicit: dict[int, ConceptRow] = {}
+    if excluded_result is not None:
+        for concept_id in excluded_result.standard_ids:
+            explicit[concept_id] = excluded_result.standard_concepts[concept_id].concept
     items: list[dict] = []
+    # An explicit exclusion wins over an inclusion of the same concept.
     for concept_id in result.standard_ids:
-        items.append(_item(result.standard_concepts[concept_id].concept))
+        if concept_id not in explicit:
+            items.append(_item(result.standard_concepts[concept_id].concept))
     for standard in exclusions:
-        items.append(_item(standard.concept, excluded=True))
+        if standard.concept.concept_id not in explicit:
+            items.append(_item(standard.concept, excluded=True))
+    for concept in explicit.values():
+        items.append(_item(concept, excluded=True))
     return {"items": items}
 
 
@@ -54,9 +64,10 @@ def write_concept_set(
     result: MappingResult,
     exclusions: list[StandardConcept],
     name: str | None = None,
+    excluded_result: MappingResult | None = None,
 ) -> Path:
     path = Path(path)
-    data = build_concept_set(result, exclusions)
+    data = build_concept_set(result, exclusions, excluded_result)
     if name:
         data["name"] = name
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -101,6 +101,14 @@ def map(
     csv_dir: Annotated[
         Path, typer.Option("--csv-dir", help="Directory of ATHENA CSVs (DuckDB backend).")
     ] = None,
+    exclude_codes: Annotated[
+        str,
+        typer.Option("--exclude-codes", help="Comma-separated source codes to exclude."),
+    ] = None,
+    exclude_codes_file: Annotated[
+        Path,
+        typer.Option("--exclude-codes-file", help="File of codes to exclude (isExcluded: true)."),
+    ] = None,
     output_dir: Annotated[
         Path, typer.Option("--output-dir", "-o", help="Output directory.")
     ] = Path("out"),
@@ -119,6 +127,10 @@ def map(
         all_codes.extend(read_codes_file(codes_file))
     if not all_codes:
         raise typer.BadParameter("No codes provided (use --codes or --codes-file).")
+
+    all_exclude_codes = _split_csv(exclude_codes)
+    if exclude_codes_file:
+        all_exclude_codes.extend(read_codes_file(exclude_codes_file))
 
     src_vocabularies = _split_csv(source_vocabularies) or list(DEFAULT_SOURCE_VOCABULARIES)
     settings = Settings(
@@ -153,6 +165,11 @@ def map(
     try:
         result = map_codes(repo, all_codes, src_vocabularies, settings.target_vocabulary)
         report = validate_result(repo, result, src_vocabularies, settings.target_vocabulary)
+        excluded_result = (
+            map_codes(repo, all_exclude_codes, src_vocabularies, settings.target_vocabulary)
+            if all_exclude_codes
+            else None
+        )
         if count:
             count_frequencies(
                 repo, result, settings.cdm_catalog, settings.cdm_schema
@@ -162,9 +179,13 @@ def map(
 
     out_dir = Path(settings.output_dir)
     json_path = write_concept_set(
-        out_dir / "concept_set.json", result, report.exclusions, name=settings.name
+        out_dir / "concept_set.json",
+        result,
+        report.exclusions,
+        name=settings.name,
+        excluded_result=excluded_result,
     )
-    xlsx_path = write_workbook(out_dir / "concept_set.xlsx", report)
+    xlsx_path = write_workbook(out_dir / "concept_set.xlsx", report, excluded_result)
 
     console.print(f"Input codes:       {len(result.source_matches)}")
     console.print(f"Mapped:            {len(result.source_matches) - len(report.missed)}")
