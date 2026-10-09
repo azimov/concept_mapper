@@ -7,7 +7,9 @@ from collections import defaultdict
 from concept_mapper.codes import (
     candidate_compact_codes,
     compact_code,
+    is_pattern,
     normalize_code,
+    pattern_to_regex,
     validate_code,
     validate_vocabulary,
 )
@@ -78,13 +80,49 @@ def _chase_standard(
     return standard_map, value_map
 
 
+def _expand_patterns(
+    repo: VocabularyRepository, codes: list[str], vocabularies: list[str]
+) -> tuple[list[str], dict[str, list[str]], list[str]]:
+    """Replace wildcard/regex entries with the concrete vocabulary codes they match."""
+    literals: list[str] = []
+    expanded_from: dict[str, list[str]] = defaultdict(list)
+    unmatched: list[str] = []
+    for code in codes:
+        if not is_pattern(code):
+            literals.append(code)
+            continue
+        pattern = code.strip()
+        rows = repo.find_concepts_by_regex(pattern_to_regex(pattern), vocabularies)
+        found: set[str] = set()
+        for row in rows:
+            try:
+                found.add(validate_code(row.concept_code))
+            except ValueError:
+                continue  # codes with characters outside the safe set (e.g. ICDO3 '/')
+        if not found:
+            unmatched.append(pattern)
+        for concept_code in sorted(found):
+            literals.append(concept_code)
+            expanded_from[concept_code].append(pattern)
+    return literals, expanded_from, unmatched
+
+
 def map_codes(
     repo: VocabularyRepository,
     codes: list[str],
     source_vocabularies: list[str],
     target_vocabulary: str | None = "SNOMED",
+    target_domains: list[str] | None = None,
 ) -> MappingResult:
+    domains = {d.strip().lower() for d in target_domains or [] if d.strip()}
     vocabularies = [validate_vocabulary(v) for v in source_vocabularies]
+    expanded_from: dict[str, list[str]] = {}
+    unmatched_patterns: list[str] = []
+    if vocabularies:
+        codes, expanded_from, unmatched_patterns = _expand_patterns(repo, codes, vocabularies)
+    unmatched_matches = [
+        SourceMatch(input_code=p, notes=["pattern matched no codes"]) for p in unmatched_patterns
+    ]
     input_codes: list[str] = []
     seen: set[str] = set()
     for code in codes:
@@ -94,7 +132,7 @@ def map_codes(
             input_codes.append(norm)
 
     if not input_codes or not vocabularies:
-        return MappingResult(source_matches=[], standard_concepts={})
+        return MappingResult(source_matches=unmatched_matches, standard_concepts={})
 
     candidates_by_code = {code: candidate_compact_codes(code) for code in input_codes}
     all_compacts = sorted({cc for cands in candidates_by_code.values() for cc in cands})
@@ -125,6 +163,8 @@ def map_codes(
         else:
             match_type = "rolled_up"
         notes: list[str] = []
+        if code in expanded_from:
+            notes.append(f"from pattern: {', '.join(expanded_from[code])}")
         vocab_ids = sorted({r.vocabulary_id for r in rows})
         if len(vocab_ids) > 1:
             notes.append(f"matched in multiple vocabularies: {', '.join(vocab_ids)}")
@@ -155,6 +195,8 @@ def map_codes(
             continue
         if target_vocabulary and row.vocabulary_id != target_vocabulary:
             continue
+        if domains and row.domain_id.lower() not in domains:
+            continue
         standard_concepts[sid] = StandardConcept(concept=row)
     for vid in all_value_ids:
         row = concepts.get(vid)
@@ -167,6 +209,7 @@ def map_codes(
         standard_ids: set[int] = set()
         value_ids: set[int] = set()
         dropped_vocabs: set[str] = set()
+        dropped_domains: set[str] = set()
         for row in rows:
             for sid in standard_map.get(row.concept_id, ()):
                 concept = concepts.get(sid)
@@ -174,6 +217,8 @@ def map_codes(
                     continue
                 if target_vocabulary and concept.vocabulary_id != target_vocabulary:
                     dropped_vocabs.add(concept.vocabulary_id)
+                elif domains and concept.domain_id.lower() not in domains:
+                    dropped_domains.add(concept.domain_id)
                 else:
                     standard_ids.add(sid)
             for vid in value_map.get(row.concept_id, ()):
@@ -184,13 +229,17 @@ def map_codes(
             match.notes.append(
                 f"mapped to non-target vocabulary: {', '.join(sorted(dropped_vocabs))}"
             )
+        if not standard_ids and dropped_domains:
+            match.notes.append(
+                f"mapped to non-target domain: {', '.join(sorted(dropped_domains))}"
+            )
         for sid in standard_ids:
             standard_concepts[sid].source_codes.append(code)
         for vid in value_ids:
             match.notes.append(f"Maps to value: {value_concepts[vid].concept_name} ({vid})")
 
     return MappingResult(
-        source_matches=matches,
+        source_matches=matches + unmatched_matches,
         standard_concepts=standard_concepts,
         maps_to_value_concepts=value_concepts,
     )

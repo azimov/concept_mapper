@@ -62,6 +62,21 @@ class VocabularyRepository(ABC):
         )
         return [ConceptRow.from_row(row) for row in self._fetch(sql)]
 
+    def _regex_predicate(self, column: str, pattern: str) -> str:
+        return f"regexp_matches({column}, {quote('(?i)' + pattern)})"
+
+    def find_concepts_by_regex(
+        self, pattern: str, vocabularies: list[str]
+    ) -> list[ConceptRow]:
+        if not pattern or not vocabularies:
+            return []
+        sql = (
+            f"SELECT {', '.join(_CONCEPT_COLUMNS)} FROM {self._table('concept')} "
+            f"WHERE vocabulary_id IN {in_literals(vocabularies)} "
+            f"AND {self._regex_predicate('concept_code', pattern)}"
+        )
+        return [ConceptRow.from_row(row) for row in self._fetch(sql)]
+
     def get_concepts(self, concept_ids: list[int]) -> dict[int, ConceptRow]:
         if not concept_ids:
             return {}

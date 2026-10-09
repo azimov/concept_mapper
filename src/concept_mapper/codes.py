@@ -9,6 +9,37 @@ _VOCAB_RE = re.compile(r"^[A-Za-z0-9_ .\-]+$")
 
 MIN_ROLLUP_LENGTH = 3
 
+REGEX_PREFIX = "re:"
+_WILDCARD_RE = re.compile(r"^[A-Za-z0-9.\-*]+$")
+_MAX_PATTERN_LENGTH = 200
+
+
+def is_pattern(code: str) -> bool:
+    """True for a wildcard (``C01.*``) or regex (``re:^C0[12]``) entry."""
+    stripped = code.strip()
+    return stripped.lower().startswith(REGEX_PREFIX) or "*" in stripped
+
+
+def pattern_to_regex(code: str) -> str:
+    """Translate a wildcard or ``re:`` entry to a regex; raise ValueError if invalid."""
+    stripped = code.strip()
+    if len(stripped) > _MAX_PATTERN_LENGTH:
+        raise ValueError(f"Pattern too long: {stripped[:30]!r}...")
+    if stripped.lower().startswith(REGEX_PREFIX):
+        pattern = stripped[len(REGEX_PREFIX):]
+        if not pattern:
+            raise ValueError("Empty regex pattern.")
+        if "'" in pattern:
+            raise ValueError("Single quotes are not allowed in regex patterns.")
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            raise ValueError(f"Invalid regex {pattern!r}: {exc}") from exc
+        return pattern
+    if not _WILDCARD_RE.match(stripped):
+        raise ValueError(f"Unsafe wildcard pattern: {code!r}")
+    return "^" + ".*".join(re.escape(part) for part in stripped.split("*")) + "$"
+
 
 def normalize_code(code: str) -> str:
     """Strip whitespace and upper-case a source code."""

@@ -57,6 +57,27 @@ uv run concept-mapper map \
 `--codes-file` accepts one code per line, or a CSV with a `code` column
 (optionally a `vocabulary_id` column to force a specific source vocabulary).
 
+## Wildcard and regex codes
+
+Any entry in `--codes`, `--codes-file`, `--exclude-codes` or
+`--exclude-codes-file` can be a pattern. It is expanded to the concrete codes
+that exist in the selected source vocabularies, and each expanded code is then
+mapped like a normal input code (the workbook notes `from pattern: ...`).
+
+| Entry | Matches |
+|---|---|
+| `C01.*` | `C01.0`, `C01.2`, ... (codes starting with `C01.`) |
+| `C0*` | every code starting with `C0` (including `C01`) |
+| `E1*.9` | `*` matches any run of characters, anywhere in the code |
+| `re:^C0[1-2]\.\d$` | a regular expression, matched anywhere in the code (anchor with `^`/`$`) |
+
+Matching is case-insensitive and runs against the vocabulary's dotted
+`concept_code`. A pattern that matches nothing is reported as `not_found`. Use
+`--codes-file` for regexes containing commas (e.g. `{1,2}`), since `--codes`
+splits on commas. Single quotes are not allowed in patterns. Regex syntax is
+evaluated by the database (RE2 for DuckDB, Java for Databricks), so stick to
+common constructs.
+
 ## Connection configuration
 
 Named connections are read from `.config/ohdsi/<name>_connection.yml` (under
@@ -87,8 +108,11 @@ Use `--connection mydb --cdm mycdm` to select a connection and CDM. The
 |---|---|
 | `--codes` | Comma-separated list of source codes. |
 | `--codes-file` | File of codes (one per line, or CSV with `code` column). |
+| `--exclude-codes` | Comma-separated source codes to exclude (written with `isExcluded: true`). |
+| `--exclude-codes-file` | File of codes to exclude (same format as `--codes-file`). |
 | `--source-vocabularies` | Source vocabularies to search (default `ICD10CM ICD9CM ICDO3 ICD10PCS ICD9Proc`). |
 | `--target-vocabulary` | Target standard vocabulary (default `SNOMED`). |
+| `--domain` | Comma-separated target domains to keep, e.g. `Condition` (default: all). Case-insensitive; applies to included and excluded codes. |
 | `--backend` | `databricks` (default) or `duckdb`. |
 | `--connection` | Named connection from `.config/ohdsi/<name>_connection.yml`. |
 | `--cdm` | CDM to use from the connection config. |
@@ -98,6 +122,32 @@ Use `--connection mydb --cdm mycdm` to select a connection and CDM. The
 | `--output-dir` | Where to write `concept_set.json` and `concept_set.xlsx`. |
 | `--name` | Concept set name. |
 | `--count` | Count record frequency of standard/source concepts in the CDM (requires `--connection` with a `cdm` block). |
+
+## Exclusion code lists
+
+Codes given via `--exclude-codes` / `--exclude-codes-file` are mapped to standard
+concepts with the same source vocabularies and target vocabulary as the main
+list. They are written to the concept set with `"isExcluded": true`; if a
+concept is in both lists, the exclusion wins and the include item is dropped.
+
+```bash
+uv run concept-mapper map \
+  --codes-file stroke.txt --exclude-codes G45.4 \
+  --connection mydb --cdm mycdm --output-dir ./out
+```
+
+The workbook gains two sheets when exclusions are given:
+
+- `Excluded Source Codes` — each excluded input code, its match type and the
+  standard concepts it mapped to (unmapped codes highlighted red).
+- `Excluded Concepts` — the resulting standard concepts and the excluded codes
+  that led to them; concepts also in the included set are highlighted yellow.
+
+Excluded concepts only remove concepts from the set. Cohort-level rules (for
+example a time window around a pregnancy record) cannot be expressed here and
+should be built as a separate concept set. All codes are searched in every
+source vocabulary, so codes that mean different things in ICD-9-CM and ICD-10-CM
+(e.g. `V27`) can match the wrong one; check the `Excluded Source Codes` sheet.
 
 ## Frequency counting (`--count`)
 
@@ -113,7 +163,7 @@ Visit, Specimen.
 ## Outputs
 
 - `concept_set.json` — OHDSI Circe `ConceptSetExpression` (`{"items": [...]}`),
-  importable into ATLAS.
+  importable into ATLAS. Excluded concepts have `isExcluded: true`.
 - `concept_set.xlsx` — workbook with `Source Codes`, `Standard Concepts`, and
   `Summary` sheets. Missed source codes are highlighted red; added/overbroad
   standard concepts are highlighted yellow.

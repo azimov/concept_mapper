@@ -81,6 +81,12 @@ def map(
     target_vocabulary: Annotated[
         str, typer.Option("--target-vocabulary", "-t", help="Target standard vocabulary.")
     ] = "SNOMED",
+    domain: Annotated[
+        str,
+        typer.Option(
+            "--domain", "-d", help="Comma-separated target domains to keep (e.g. Condition)."
+        ),
+    ] = None,
     backend: Annotated[
         str, typer.Option("--backend", "-b", help="Backend: databricks or duckdb.")
     ] = "databricks",
@@ -133,6 +139,7 @@ def map(
         all_exclude_codes.extend(read_codes_file(exclude_codes_file))
 
     src_vocabularies = _split_csv(source_vocabularies) or list(DEFAULT_SOURCE_VOCABULARIES)
+    target_domains = _split_csv(domain)
     settings = Settings(
         backend=backend,
         target_vocabulary=target_vocabulary,
@@ -163,10 +170,18 @@ def map(
 
     repo = build_repository(settings)
     try:
-        result = map_codes(repo, all_codes, src_vocabularies, settings.target_vocabulary)
+        result = map_codes(
+            repo, all_codes, src_vocabularies, settings.target_vocabulary, target_domains
+        )
         report = validate_result(repo, result, src_vocabularies, settings.target_vocabulary)
         excluded_result = (
-            map_codes(repo, all_exclude_codes, src_vocabularies, settings.target_vocabulary)
+            map_codes(
+                repo,
+                all_exclude_codes,
+                src_vocabularies,
+                settings.target_vocabulary,
+                target_domains,
+            )
             if all_exclude_codes
             else None
         )

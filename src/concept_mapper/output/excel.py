@@ -68,8 +68,13 @@ def _write_excluded_sheets(wb: Workbook, report: ValidationReport, excluded: Map
     for match in excluded.source_matches:
         src = match.source_concept
         ids = match.standard_concept_ids
-        codes = [excluded.standard_concepts[i].concept.concept_code for i in ids if i in excluded.standard_concepts]
-        names = [excluded.standard_concepts[i].concept.concept_name for i in ids if i in excluded.standard_concepts]
+        found = [
+            excluded.standard_concepts[i].concept
+            for i in ids
+            if i in excluded.standard_concepts
+        ]
+        codes = [c.concept_code for c in found]
+        names = [c.concept_name for c in found]
         ws.append(
             [
                 match.input_code,

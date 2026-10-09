@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from concept_mapper.repository.base import VocabularyRepository
+from concept_mapper.repository.base import VocabularyRepository, quote
 
 
 class DatabricksRepository(VocabularyRepository):
@@ -41,6 +41,10 @@ class DatabricksRepository(VocabularyRepository):
         if s:
             return f"{s}.{name}"
         return name
+
+    def _regex_predicate(self, column: str, pattern: str) -> str:
+        # Spark SQL string literals treat backslash as an escape character.
+        return f"{column} RLIKE {quote('(?i)' + pattern.replace(chr(92), chr(92) * 2))}"
 
     def _fetch(self, sql: str) -> list[dict]:
         self._cursor.execute(sql)

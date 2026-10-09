@@ -48,3 +48,24 @@ def test_unmapped_source(repo):
 def test_deduplicates_input_codes(repo):
     result = map_codes(repo, ["E11.9", "E11.9"], SOURCE_VOCABULARIES, "SNOMED")
     assert len(result.source_matches) == 1
+
+
+def test_wildcard_expands_to_vocabulary_codes(repo):
+    result = map_codes(repo, ["E11.*", "I2*"], SOURCE_VOCABULARIES, "SNOMED")
+    codes = {m.input_code for m in result.source_matches}
+    assert {"E11.9", "I21.0"} <= codes
+    assert all(m.status == "mapped" for m in result.source_matches)
+    e11 = next(m for m in result.source_matches if m.input_code == "E11.9")
+    assert "from pattern: E11.*" in e11.notes
+
+
+def test_regex_expands_to_vocabulary_codes(repo):
+    result = map_codes(repo, [r"re:^[EI]\d\d\.\d$"], SOURCE_VOCABULARIES, "SNOMED")
+    assert {m.input_code for m in result.source_matches} == {"E11.9", "I21.0"}
+
+
+def test_pattern_with_no_match_is_reported(repo):
+    result = map_codes(repo, ["X99*"], SOURCE_VOCABULARIES, "SNOMED")
+    match = result.source_matches[0]
+    assert match.input_code == "X99*"
+    assert match.status == "not_found"
