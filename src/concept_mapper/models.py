@@ -66,6 +66,7 @@ class SourceMatch:
     matched_code: str | None = None
     match_type: str = "not_found"
     source_concept: ConceptRow | None = None
+    source_concept_ids: list[int] = field(default_factory=list)
     standard_concept_ids: list[int] = field(default_factory=list)
     value_concept_ids: list[int] = field(default_factory=list)
     source_record_count: int | None = None
@@ -81,11 +82,22 @@ class SourceMatch:
 
 
 @dataclass
+class SourceConceptCount:
+    concept_id: int
+    concept_code: str
+    concept_name: str
+    vocabulary_id: str
+    record_count: int | None = None
+    in_input: bool = False
+
+
+@dataclass
 class StandardConcept:
     concept: ConceptRow
     source_codes: list[str] = field(default_factory=list)
     extra_source_codes: list[str] = field(default_factory=list)
     record_count: int | None = None
+    source_counts: list[SourceConceptCount] = field(default_factory=list)
 
     @property
     def is_overbroad(self) -> bool:

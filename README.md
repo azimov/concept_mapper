@@ -155,7 +155,14 @@ With `--count`, each standard concept's `domain_id` is used to select the CDM
 domain table (e.g. `Condition` -> `condition_occurrence`), and the record count
 per standard concept is computed from that table. Source-concept frequencies are
 computed from the matching `*_source_concept_id` column. Counts are added to the
-Excel workbook (`record_count` / `source_record_count` columns).
+Excel workbook: `record_count` on `Standard Concepts` and `source_record_count`
+on `Source Codes`.
+
+The `Standard vs Source` sheet lists, for every standard concept, *all* source
+concepts in the selected source vocabularies that map to it (not only the ones
+in your input), with the standard record count beside each source concept's own
+record count. Source concepts that were not in your input are highlighted
+yellow; a large count there shows how much a vocabulary mismatch matters.
 
 Supported domains: Condition, Drug, Procedure, Measurement, Observation, Device,
 Visit, Specimen.
@@ -166,7 +173,9 @@ Visit, Specimen.
   importable into ATLAS. Excluded concepts have `isExcluded: true`.
 - `concept_set.xlsx` — workbook with `Source Codes`, `Standard Concepts`, and
   `Summary` sheets. Missed source codes are highlighted red; added/overbroad
-  standard concepts are highlighted yellow.
+  standard concepts are highlighted yellow. With `--count`, the
+  `Standard vs Source` sheet compares each standard concept's count with the
+  count of every source concept that maps to it.
 
 ## Development
 

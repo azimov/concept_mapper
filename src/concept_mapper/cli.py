@@ -187,7 +187,11 @@ def map(
         )
         if count:
             count_frequencies(
-                repo, result, settings.cdm_catalog, settings.cdm_schema
+                repo,
+                result,
+                settings.cdm_catalog,
+                settings.cdm_schema,
+                src_vocabularies,
             )
     finally:
         repo.close()

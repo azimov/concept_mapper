@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from concept_mapper.models import MappingResult
+from concept_mapper.models import MappingResult, SourceConceptCount
 from concept_mapper.repository.base import VocabularyRepository
 
 DOMAIN_TABLES: dict[str, tuple[str, str, str]] = {
@@ -24,6 +24,7 @@ def count_frequencies(
     result: MappingResult,
     catalog: str | None = None,
     schema: str | None = None,
+    source_vocabularies: list[str] | None = None,
 ) -> None:
     standard_by_domain: dict[str, list[int]] = defaultdict(list)
     for standard in result.standard_concepts.values():
@@ -41,8 +42,8 @@ def count_frequencies(
     source_by_domain: dict[str, set[int]] = defaultdict(set)
     for match in result.source_matches:
         if match.source_concept is not None:
-            source_by_domain[match.source_concept.domain_id].add(
-                match.source_concept.concept_id
+            source_by_domain[match.source_concept.domain_id].update(
+                match.source_concept_ids or [match.source_concept.concept_id]
             )
 
     source_counts: dict[int, int] = {}
@@ -57,4 +58,57 @@ def count_frequencies(
 
     for match in result.source_matches:
         if match.source_concept is not None:
-            match.source_record_count = source_counts.get(match.source_concept.concept_id, 0)
+            ids = match.source_concept_ids or [match.source_concept.concept_id]
+            match.source_record_count = sum(source_counts.get(cid, 0) for cid in ids)
+
+    if source_vocabularies:
+        _count_all_sources(repo, result, source_vocabularies, catalog, schema)
+
+
+def _count_all_sources(
+    repo: VocabularyRepository,
+    result: MappingResult,
+    source_vocabularies: list[str],
+    catalog: str | None,
+    schema: str | None,
+) -> None:
+    """Attach a count for every source concept that maps to each standard concept."""
+    reverse_rows = repo.reverse_maps_to(result.standard_ids, source_vocabularies)
+    input_source_ids = {cid for m in result.source_matches for cid in m.source_concept_ids}
+
+    # A source concept is counted in the table of the standard concept's domain.
+    ids_by_domain: dict[str, set[int]] = defaultdict(set)
+    for row in reverse_rows:
+        standard = result.standard_concepts.get(row.standard_concept_id)
+        if standard is not None:
+            ids_by_domain[standard.concept.domain_id].add(row.source_concept_id)
+
+    counts_by_domain: dict[str, dict[int, int]] = {}
+    for domain, ids in ids_by_domain.items():
+        mapping = DOMAIN_TABLES.get(domain)
+        if mapping is None:
+            continue
+        table, _, source_column = mapping
+        counts_by_domain[domain] = repo.count_in_table(
+            table, source_column, sorted(ids), catalog, schema
+        )
+
+    for row in reverse_rows:
+        standard = result.standard_concepts.get(row.standard_concept_id)
+        if standard is None:
+            continue
+        domain_counts = counts_by_domain.get(standard.concept.domain_id)
+        standard.source_counts.append(
+            SourceConceptCount(
+                concept_id=row.source_concept_id,
+                concept_code=row.source_concept_code,
+                concept_name=row.source_concept_name,
+                vocabulary_id=row.source_vocabulary_id,
+                record_count=None
+                if domain_counts is None
+                else domain_counts.get(row.source_concept_id, 0),
+                in_input=row.source_concept_id in input_source_ids,
+            )
+        )
+    for standard in result.standard_concepts.values():
+        standard.source_counts.sort(key=lambda s: (-(s.record_count or 0), s.concept_code))

@@ -174,6 +174,7 @@ def map_codes(
                 matched_code=rows[0].concept_code,
                 match_type=match_type,
                 source_concept=rows[0],
+                source_concept_ids=sorted({r.concept_id for r in rows}),
                 notes=notes,
             )
         )

@@ -53,3 +53,19 @@ def test_count_frequencies():
         assert by_code["I21.0"].source_record_count == 1
     finally:
         repo.close()
+
+
+def test_all_source_concepts_counted_per_standard_concept():
+    repo = _repo()
+    try:
+        result = map_codes(repo, ["E11.9"], SOURCE_VOCABULARIES, "SNOMED")
+        count_frequencies(repo, result, source_vocabularies=SOURCE_VOCABULARIES)
+
+        standard = result.standard_concepts[2001]
+        assert standard.record_count == 3
+        by_source = {s.concept_id: s for s in standard.source_counts}
+        assert by_source[1001].record_count == 2
+        assert by_source[1001].in_input is True
+        assert all(s.vocabulary_id == "ICD10CM" for s in standard.source_counts)
+    finally:
+        repo.close()

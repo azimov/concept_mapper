@@ -129,6 +129,45 @@ def _write_excluded_sheets(wb: Workbook, report: ValidationReport, excluded: Map
                 cell.font = _YELLOW_FONT
 
 
+def _write_standard_vs_source(wb: Workbook, report: ValidationReport) -> None:
+    ws = wb.create_sheet("Standard vs Source")
+    _write_header(
+        ws,
+        [
+            "standard_concept_id",
+            "standard_concept_name",
+            "standard_record_count",
+            "source_concept_id",
+            "source_concept_code",
+            "source_concept_name",
+            "source_vocabulary_id",
+            "source_record_count",
+            "in_input",
+        ],
+        [18, 48, 18, 18, 16, 48, 18, 18, 10],
+    )
+    for cid in report.result.standard_ids:
+        standard = report.result.standard_concepts[cid]
+        for src in standard.source_counts:
+            ws.append(
+                [
+                    cid,
+                    standard.concept.concept_name,
+                    standard.record_count if standard.record_count is not None else "",
+                    src.concept_id,
+                    src.concept_code,
+                    src.concept_name,
+                    src.vocabulary_id,
+                    src.record_count if src.record_count is not None else "",
+                    "yes" if src.in_input else "no",
+                ]
+            )
+            if not src.in_input:
+                for cell in ws[ws.max_row]:
+                    cell.fill = _YELLOW
+                    cell.font = _YELLOW_FONT
+
+
 def write_workbook(
     path: str | Path,
     report: ValidationReport,
@@ -200,10 +239,11 @@ def write_workbook(
             "source_codes",
             "extra_source_codes",
             "record_count",
+            "source_concept_count",
             "is_overbroad",
             "recommendation",
         ],
-        [18, 14, 48, 14, 14, 18, 40, 40, 14, 14, 24],
+        [18, 14, 48, 14, 14, 18, 40, 40, 14, 20, 14, 24],
     )
     recommendation_by_id: dict[int, str] = {}
     for standard in report.exclusions:
@@ -225,6 +265,7 @@ def write_workbook(
                 "; ".join(standard.source_codes),
                 "; ".join(standard.extra_source_codes),
                 standard.record_count if standard.record_count is not None else "",
+                len(standard.source_counts) if standard.source_counts else "",
                 "yes" if standard.is_overbroad else "no",
                 recommendation_by_id.get(cid, ""),
             ]
@@ -233,6 +274,10 @@ def write_workbook(
             for cell in ws2[ws2.max_row]:
                 cell.fill = _YELLOW
                 cell.font = _YELLOW_FONT
+
+    # ── Standard vs Source sheet ──────────────────────────────────────
+    if any(s.source_counts for s in report.result.standard_concepts.values()):
+        _write_standard_vs_source(wb, report)
 
     # ── Summary sheet ─────────────────────────────────────────────────
     ws3 = wb.create_sheet("Summary")
