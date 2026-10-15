@@ -12,3 +12,8 @@ concept_id	concept_name	domain_id	vocabulary_id	concept_class_id	standard_concep
 2004	Acute myocardial infarction	Condition	SNOMED	Clinical Finding	S	57054005	19700101	20991231	
 2005	General examination of patient	Observation	SNOMED	Clinical Finding	S	162673000	19700101	20991231	
 9999	Examination intermediate	Observation	SNOMED	Clinical Finding		INTERM1	19700101	20991231	
+1010	Crohn's disease of small intestine	Condition	ICD10CM	4-char billing code		K50.0	19700101	20991231	
+1011	Crohn's disease of large intestine	Condition	ICD10CM	4-char billing code		K50.1	19700101	20991231	
+1012	Crohn's disease [regional enteritis]	Condition	ICD10CM	3-char nonbill code		K50	19700101	20991231	
+2006	Crohn's disease of small intestine	Condition	SNOMED	Clinical Finding	S	34000006	19700101	20991231	
+2007	Crohn's disease of large bowel	Condition	SNOMED	Clinical Finding	S	7620006	19700101	20991231	

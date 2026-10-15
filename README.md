@@ -171,11 +171,31 @@ Visit, Specimen.
 
 - `concept_set.json` — OHDSI Circe `ConceptSetExpression` (`{"items": [...]}`),
   importable into ATLAS. Excluded concepts have `isExcluded: true`.
-- `concept_set.xlsx` — workbook with `Source Codes`, `Standard Concepts`, and
-  `Summary` sheets. Missed source codes are highlighted red; added/overbroad
-  standard concepts are highlighted yellow. With `--count`, the
-  `Standard vs Source` sheet compares each standard concept's count with the
-  count of every source concept that maps to it.
+- `concept_set.xlsx` — workbook with `Source Codes`, `Standard Concepts`,
+  `Overbroad Source Codes` and `Summary` sheets. Missed source codes are
+  highlighted red; added/overbroad standard concepts are highlighted yellow.
+  With `--count`, the `Standard vs Source` sheet compares each standard
+  concept's count with the count of every source concept that maps to it.
+
+### Overbroad Source Codes sheet
+
+One row per source code you did **not** list that is pulled into the set,
+paired with the standard concept that brings it in (`via_standard_concept_*`)
+and the input code(s) that introduced that standard concept. Record counts are
+filled with `--count` (blank otherwise); rows are sorted by source count.
+
+One-to-many `Maps to` relationships decide how easy a removal is
+(`removal_impact`):
+
+| removal_impact | colour | meaning |
+|---|---|---|
+| `trivial` | green | Every introducing input code also maps to another standard concept (`input_one_to_many = yes`), so dropping this standard concept removes the overbroad code without losing coverage of any input code. |
+| `needs review` | yellow | At least one introducing input code maps *only* to this standard concept (`input_alternative_standards` shows `none (sole mapping)`); removing it loses that input code. |
+| `not removable alone` | orange | The overbroad code also maps to other standard concepts in the set (`also_mapped_via_in_set_standards`), so removing just this one does not remove it. |
+
+When a suggested exclusion would leave some of its extra codes reachable via
+other in-set concepts, the `Standard Concepts` recommendation reads
+`exclude (partial: <code> still via <ids>)`.
 
 ## Development
 

@@ -4,3 +4,6 @@ condition_occurrence_id	person_id	condition_concept_id	condition_source_concept_
 3	p3	2001	1006
 4	p4	2002	1002
 5	p5	2003	1003
+6	p6	2006	1012
+7	p7	2007	1012
+8	p8	2006	1010

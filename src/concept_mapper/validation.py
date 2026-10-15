@@ -8,6 +8,8 @@ from concept_mapper.codes import compact_code, validate_vocabulary
 from concept_mapper.models import (
     ConceptRow,
     MappingResult,
+    OverbroadSource,
+    ReverseMapRow,
     StandardConcept,
     ValidationReport,
 )
@@ -27,6 +29,7 @@ def validate_result(
     exclusions: list[StandardConcept] = []
     needs_review: list[StandardConcept] = []
     descendant_suggestions: dict[int, list[ConceptRow]] = {}
+    overbroad_sources: list[OverbroadSource] = []
 
     if result.standard_ids and vocabularies:
         matched_compacts = {
@@ -59,6 +62,10 @@ def validate_result(
             else:
                 exclusions.append(standard)
 
+        overbroad_sources = _build_overbroad_sources(
+            result, reverse_rows, matched_compacts, code_standard_ids
+        )
+
         needs_review_ids = [sc.concept.concept_id for sc in needs_review]
         if needs_review_ids and repo.supports_ancestors:
             desc_map = repo.get_descendants(needs_review_ids)
@@ -84,4 +91,47 @@ def validate_result(
         exclusions=exclusions,
         needs_review=needs_review,
         descendant_suggestions=descendant_suggestions,
+        overbroad_sources=overbroad_sources,
     )
+
+
+def _build_overbroad_sources(
+    result: MappingResult,
+    reverse_rows: list[ReverseMapRow],
+    matched_compacts: set[str],
+    code_standard_ids: dict[str, set[int]],
+) -> list[OverbroadSource]:
+    """One row per (overbroad source concept, in-set standard concept that pulls it in)."""
+    in_set_by_source: dict[int, set[int]] = defaultdict(set)
+    for row in reverse_rows:
+        if row.standard_concept_id in result.standard_concepts:
+            in_set_by_source[row.source_concept_id].add(row.standard_concept_id)
+
+    rows: list[OverbroadSource] = []
+    seen: set[tuple[int, int]] = set()
+    for row in reverse_rows:
+        sid = row.standard_concept_id
+        standard = result.standard_concepts.get(sid)
+        if standard is None or compact_code(row.source_concept_code) in matched_compacts:
+            continue
+        key = (row.source_concept_id, sid)
+        if key in seen:
+            continue
+        seen.add(key)
+        input_codes = list(dict.fromkeys(standard.source_codes))
+        rows.append(
+            OverbroadSource(
+                source_concept_id=row.source_concept_id,
+                source_concept_code=row.source_concept_code,
+                source_concept_name=row.source_concept_name,
+                source_vocabulary_id=row.source_vocabulary_id,
+                standard_concept_id=sid,
+                introducing_input_codes=input_codes,
+                alternative_standards={
+                    code: sorted(code_standard_ids[code] - {sid}) for code in input_codes
+                },
+                other_in_set_standard_ids=sorted(in_set_by_source[row.source_concept_id] - {sid}),
+            )
+        )
+    rows.sort(key=lambda o: (o.source_concept_code, o.standard_concept_id))
+    return rows

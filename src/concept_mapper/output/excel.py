@@ -14,6 +14,15 @@ _RED = PatternFill(start_color="FFFFC7CE", end_color="FFFFC7CE", fill_type="soli
 _RED_FONT = Font(color="FF9C0006")
 _YELLOW = PatternFill(start_color="FFFFEB9C", end_color="FFFFEB9C", fill_type="solid")
 _YELLOW_FONT = Font(color="FF9C6500")
+_GREEN = PatternFill(start_color="FFC6EFCE", end_color="FFC6EFCE", fill_type="solid")
+_GREEN_FONT = Font(color="FF006100")
+_ORANGE = PatternFill(start_color="FFF8CBAD", end_color="FFF8CBAD", fill_type="solid")
+_ORANGE_FONT = Font(color="FF833C0B")
+_IMPACT_STYLE = {
+    "trivial": (_GREEN, _GREEN_FONT),
+    "needs review": (_YELLOW, _YELLOW_FONT),
+    "not removable alone": (_ORANGE, _ORANGE_FONT),
+}
 _HEADER_FILL = PatternFill(start_color="FFDDEBF7", end_color="FFDDEBF7", fill_type="solid")
 _HEADER_FONT = Font(bold=True)
 
@@ -168,6 +177,66 @@ def _write_standard_vs_source(wb: Workbook, report: ValidationReport) -> None:
                     cell.font = _YELLOW_FONT
 
 
+def _write_overbroad_sources(wb: Workbook, report: ValidationReport) -> None:
+    ws = wb.create_sheet("Overbroad Source Codes")
+    _write_header(
+        ws,
+        [
+            "source_concept_id",
+            "source_concept_code",
+            "source_concept_name",
+            "source_vocabulary_id",
+            "source_record_count",
+            "via_standard_concept_id",
+            "via_standard_concept_name",
+            "standard_record_count",
+            "introducing_input_codes",
+            "input_alternative_standards",
+            "input_one_to_many",
+            "also_mapped_via_in_set_standards",
+            "removal_impact",
+        ],
+        [18, 16, 48, 18, 18, 22, 48, 20, 24, 40, 16, 32, 22],
+    )
+    standards = report.result.standard_concepts
+
+    def source_count(o) -> int | None:
+        for src in standards[o.standard_concept_id].source_counts:
+            if src.concept_id == o.source_concept_id:
+                return src.record_count
+        return None
+
+    rows = [(o, source_count(o)) for o in report.overbroad_sources]
+    rows.sort(key=lambda r: (-(r[1] or 0), r[0].source_concept_code, r[0].standard_concept_id))
+    for o, count in rows:
+        standard = standards[o.standard_concept_id]
+        alternatives = "; ".join(
+            f"{code} -> {', '.join(str(i) for i in alts) if alts else 'none (sole mapping)'}"
+            for code, alts in o.alternative_standards.items()
+        )
+        ws.append(
+            [
+                o.source_concept_id,
+                o.source_concept_code,
+                o.source_concept_name,
+                o.source_vocabulary_id,
+                count if count is not None else "",
+                o.standard_concept_id,
+                standard.concept.concept_name,
+                standard.record_count if standard.record_count is not None else "",
+                "; ".join(o.introducing_input_codes),
+                alternatives,
+                "yes" if o.input_one_to_many else "no",
+                "; ".join(str(i) for i in o.other_in_set_standard_ids),
+                o.removal_impact,
+            ]
+        )
+        fill, font = _IMPACT_STYLE[o.removal_impact]
+        for cell in ws[ws.max_row]:
+            cell.fill = fill
+            cell.font = font
+
+
 def write_workbook(
     path: str | Path,
     report: ValidationReport,
@@ -247,7 +316,16 @@ def write_workbook(
     )
     recommendation_by_id: dict[int, str] = {}
     for standard in report.exclusions:
-        recommendation_by_id[standard.concept.concept_id] = "exclude"
+        cid = standard.concept.concept_id
+        surviving = report.surviving_extra_codes(cid)
+        if surviving:
+            detail = ", ".join(
+                f"{code} still via {', '.join(str(i) for i in ids)}"
+                for code, ids in sorted(surviving.items())
+            )
+            recommendation_by_id[cid] = f"exclude (partial: {detail})"
+        else:
+            recommendation_by_id[cid] = "exclude"
     for standard in report.needs_review:
         recommendation_by_id[standard.concept.concept_id] = "needs review"
 
@@ -275,6 +353,9 @@ def write_workbook(
                 cell.fill = _YELLOW
                 cell.font = _YELLOW_FONT
 
+    # ── Overbroad Source Codes sheet ──────────────────────────────────
+    _write_overbroad_sources(wb, report)
+
     # ── Standard vs Source sheet ──────────────────────────────────────
     if any(s.source_counts for s in report.result.standard_concepts.values()):
         _write_standard_vs_source(wb, report)
@@ -291,6 +372,11 @@ def write_workbook(
     ws3.append(["added / overbroad", str(len(report.added))])
     ws3.append(["suggested exclusions", str(len(report.exclusions))])
     ws3.append(["needs review", str(len(report.needs_review))])
+    overbroad_codes = {o.source_concept_id for o in report.overbroad_sources}
+    ws3.append(["overbroad source codes", str(len(overbroad_codes))])
+    for impact in _IMPACT_STYLE:
+        n = sum(1 for o in report.overbroad_sources if o.removal_impact == impact)
+        ws3.append([f"  removal impact: {impact}", str(n)])
     ws3.append([])
     ws3.append(["Missed source codes", ""])
     for m in report.missed:
