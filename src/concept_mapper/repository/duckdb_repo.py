@@ -41,13 +41,20 @@ class DuckDBRepository(VocabularyRepository):
                 [str(ancestor)],
             )
             self.supports_ancestors = True
+        for cdm_table in (
+            "condition_occurrence", "drug_exposure", "procedure_occurrence", "measurement",
+            "observation", "device_exposure", "visit_occurrence", "specimen",
+        ):
+            path = csv_dir / f"{cdm_table.upper()}.csv"
+            if path.exists():
+                self.load_table(cdm_table, str(path))
 
     def _table(self, name: str, catalog: str | None = None, schema: str | None = None) -> str:
         return name
 
     def load_table(self, name: str, csv_path: str) -> None:
         self._conn.execute(
-            "CREATE TABLE " + name + " AS SELECT * FROM read_csv_auto(?, header=true)",
+            "CREATE OR REPLACE TABLE " + name + " AS SELECT * FROM read_csv_auto(?, header=true)",
             [csv_path],
         )
 

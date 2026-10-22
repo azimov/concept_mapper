@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 from typing import Annotated
 
@@ -24,10 +25,11 @@ from concept_mapper.connections import (
 from concept_mapper.frequency import count_frequencies
 from concept_mapper.mapping import map_codes
 from concept_mapper.output.concept_set import write_concept_set
-from concept_mapper.output.excel import write_workbook
+from concept_mapper.output.excel import write_source_impact, write_workbook
+from concept_mapper.source_impact import compute_source_impact, resolve_concept_set_ids
 from concept_mapper.validation import validate_result
 
-app = typer.Typer(help="Build OHDSI SNOMED concept sets from ICD/source codes.")
+app = typer.Typer(help="Build OHDSI Standard concept sets from lists of source codes.")
 console = Console()
 
 
@@ -214,6 +216,72 @@ def map(
     console.print(f"Suggested exclusions: {len(report.exclusions)}")
     console.print(f"Needs review:      {len(report.needs_review)}")
     console.print(f"Wrote: {json_path}")
+    console.print(f"Wrote: {xlsx_path}")
+
+
+@app.command("source-impact")
+def source_impact(
+    concept_set: Annotated[
+        Path, typer.Option("--concept-set", help="Circe concept set JSON (from `map`).")
+    ],
+    codes: Annotated[str, typer.Option("--codes", "-c", help="Comma-separated source codes.")] = None,
+    codes_file: Annotated[Path, typer.Option("--codes-file", "-f")] = None,
+    source_vocabularies: Annotated[str, typer.Option("--source-vocabularies", "-s")] = None,
+    target_vocabulary: Annotated[str, typer.Option("--target-vocabulary", "-t")] = "SNOMED",
+    domain: Annotated[str, typer.Option("--domain", "-d", help="CDM domain table.")] = "Condition",
+    backend: Annotated[str, typer.Option("--backend", "-b")] = "databricks",
+    catalog: Annotated[str, typer.Option("--catalog")] = None,
+    schema: Annotated[str, typer.Option("--schema")] = None,
+    connection: Annotated[str, typer.Option("--connection")] = None,
+    cdm: Annotated[str, typer.Option("--cdm")] = None,
+    config_dir: Annotated[Path, typer.Option("--config-dir")] = None,
+    csv_dir: Annotated[Path, typer.Option("--csv-dir")] = None,
+    output_dir: Annotated[Path, typer.Option("--output-dir", "-o")] = Path("out"),
+) -> None:
+    """Person-level (cohort-free) impact of each source code on a concept set."""
+    all_codes = _split_csv(codes)
+    if codes_file:
+        all_codes.extend(read_codes_file(codes_file))
+    if not all_codes:
+        raise typer.BadParameter("No codes provided (use --codes or --codes-file).")
+    src_vocabularies = _split_csv(source_vocabularies) or list(DEFAULT_SOURCE_VOCABULARIES)
+    settings = Settings(
+        backend=backend,
+        target_vocabulary=target_vocabulary,
+        catalog=catalog,
+        schema=schema,
+        csv_dir=str(csv_dir) if csv_dir else None,
+    )
+    if connection:
+        config = load_connection(connection, str(config_dir) if config_dir else None)
+        resolved_catalog, resolved_schema = vocabulary_schema_parts(config, cdm)
+        settings.backend = config.driver
+        settings.server_hostname = config.databricks.server_hostname
+        settings.http_path = config.databricks.http_path
+        settings.token = config.databricks.token
+        settings.catalog = resolved_catalog or catalog
+        settings.schema = resolved_schema or schema
+        cdm_catalog, cdm_schema = cdm_schema_parts(config, cdm)
+        settings.cdm_catalog = cdm_catalog or resolved_catalog
+        settings.cdm_schema = cdm_schema
+    settings = settings_from_env(settings)
+
+    expression = json.loads(concept_set.read_text())
+    repo = build_repository(settings)
+    try:
+        standard_ids = resolve_concept_set_ids(repo, expression)
+        result = map_codes(repo, all_codes, src_vocabularies, settings.target_vocabulary, [])
+        impact = compute_source_impact(
+            repo, standard_ids, result, domain, settings.cdm_catalog, settings.cdm_schema
+        )
+    finally:
+        repo.close()
+
+    xlsx_path = write_source_impact(Path(output_dir) / "source_impact.xlsx", impact)
+    console.print(f"Concept set standard concepts: {len(standard_ids)}")
+    console.print(f"Persons in set:    {impact.total_persons}")
+    for label, m in sorted(impact.by_code.items(), key=lambda kv: -kv[1]["unique_persons"]):
+        console.print(f"  {label}: persons={m['persons']} lost_if_removed={m['unique_persons']}")
     console.print(f"Wrote: {xlsx_path}")
 
 

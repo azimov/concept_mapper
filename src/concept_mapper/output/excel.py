@@ -408,3 +408,39 @@ def write_workbook(
 
     wb.save(path)
     return path
+
+
+def write_source_impact(path: str | Path, impact) -> Path:
+    """Write person-level source code impact sheets (SourceImpact)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Source Code Impact"
+    _write_header(
+        ws,
+        ["source_code", "persons", "records", "persons_lost_if_removed",
+         "pct_of_set_persons", "pct_lost_if_removed"],
+        [22, 12, 12, 24, 20, 20],
+    )
+    total = impact.total_persons or 1
+    ordered = sorted(impact.by_code.items(), key=lambda kv: -kv[1]["unique_persons"])
+    for label, m in ordered:
+        ws.append([label, m["persons"], m["records"], m["unique_persons"],
+                   round(100 * m["persons"] / total, 2),
+                   round(100 * m["unique_persons"] / total, 2)])
+    ws.append([])
+    ws.append(["TOTAL (distinct persons)", impact.total_persons, impact.total_records])
+
+    ws2 = wb.create_sheet("By Standard Concept")
+    _write_header(ws2, ["standard_concept_id", "source_code", "persons", "records"],
+                  [22, 22, 12, 12])
+    for r in impact.by_standard:
+        ws2.append([r["standard_concept_id"], r["label"], r["persons"], r["records"]])
+
+    ws3 = wb.create_sheet("Code Overlap")
+    _write_header(ws3, ["code_a", "code_b", "shared_persons"], [22, 22, 16])
+    for r in impact.overlap:
+        ws3.append([r["code_a"], r["code_b"], r["persons"]])
+    wb.save(path)
+    return path

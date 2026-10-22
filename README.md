@@ -208,3 +208,17 @@ uv run ruff check .
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
+
+## Source code impact (cohort-free)
+
+```bash
+concept-mapper source-impact --concept-set out/concept_set.json -f codes.txt \
+  --connection mydb --cdm mycdm -o out
+```
+
+Resolves the concept set with `ohdsi-circepy`, then counts qualifying records
+per person (no cohorts, no index dates) and writes `source_impact.xlsx`:
+per-source-code persons/records, persons lost if the code were removed (persons
+with no other qualifying code), per-standard-concept counts, and a code-pair
+overlap sheet. For `--backend duckdb`, CDM tables such as
+`CONDITION_OCCURRENCE.csv` in `--csv-dir` are loaded automatically.
